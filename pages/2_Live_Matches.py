@@ -12,7 +12,7 @@ st.set_page_config(
 )
 
 st.title("\U0001F3CF Cricbuzz Live Matches")
-st.caption("Live match information from the Cricbuzz API.")
+st.caption("Live scores and match updates powered by Cricbuzz.")
 
 if st.button("Refresh Matches"):
     st.cache_data.clear()
@@ -21,6 +21,23 @@ if st.button("Refresh Matches"):
 @st.cache_data(ttl=60)
 def load_matches():
     return get_live_matches()
+
+
+def display_team_score(team_name, innings_list):
+    st.markdown(f"**{team_name}**")
+
+    if not innings_list:
+        st.write("Score not available yet")
+        return
+
+    for innings in innings_list:
+        score = innings.get("score", "N/A")
+        overs = innings.get("overs")
+
+        if overs is not None:
+            st.write(f"**{score}** ({overs} overs)")
+        else:
+            st.write(f"**{score}**")
 
 
 try:
@@ -60,28 +77,71 @@ try:
                 filtered_df["state"] == selected_status
             ]
 
-        display_columns = [
+        for _, match in filtered_df.iterrows():
+            with st.container(border=True):
+                st.caption(
+                    f"{match['series']} | {match['format']} | "
+                    f"{match['match']}"
+                )
+
+                team1_col, vs_col, team2_col = st.columns([5, 1, 5])
+
+                with team1_col:
+                    display_team_score(
+                        match["team1"],
+                        match["team1_score"],
+                    )
+
+                with vs_col:
+                    st.markdown("### VS")
+
+                with team2_col:
+                    display_team_score(
+                        match["team2"],
+                        match["team2_score"],
+                    )
+
+                st.write(f"**Status:** {match['state']}")
+                st.write(
+                    match["status"] or "Match status not available."
+                )
+
+                venue = match["venue"] or "Venue not available"
+                city = match["city"]
+
+                if city:
+                    venue += f", {city}"
+
+                st.caption(f"Venue: {venue}")
+
+        st.subheader("Download Match Data")
+
+        export_columns = [
             "match_id",
-            "team1",
-            "team2",
+            "series",
+            "match",
             "format",
-            "venue",
+            "team1",
+            "team1_score",
+            "team2",
+            "team2_score",
             "state",
             "status",
+            "venue",
+            "city",
         ]
 
-        st.dataframe(
-            filtered_df[display_columns],
-            use_container_width=True,
-            hide_index=True,
-        )
+        export_df = matches_df[export_columns].copy()
 
-        csv_data = filtered_df[display_columns].to_csv(index=False)
+        for column in ["team1_score", "team2_score"]:
+            export_df[column] = export_df[column].apply(
+                lambda value: str(value)
+            )
 
         st.download_button(
-            label="Download matches as CSV",
-            data=csv_data,
-            file_name="cricbuzz_live_matches.csv",
+            label="Download all matches as CSV",
+            data=export_df.to_csv(index=False),
+            file_name="cricbuzz_matches.csv",
             mime="text/csv",
         )
 
